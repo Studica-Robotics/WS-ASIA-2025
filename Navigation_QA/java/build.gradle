@@ -1,0 +1,73 @@
+plugins {
+    id "java"
+    id "com.kauailabs.first.GradleRIO" version "2020.3.2.30"
+}
+
+sourceCompatibility = JavaVersion.VERSION_11
+targetCompatibility = JavaVersion.VERSION_11
+
+def ROBOT_MAIN_CLASS = "frc.robot.Main"
+
+// ★ Ensure the correct repositories & order.
+//   Put FRCMaven FIRST so WPILib artifacts (cscore, ntcore, etc.) resolve there.
+//   Keep Studica LAST (you need it for Studica libs, but it’s flaky right now).
+repositories {
+    mavenLocal()
+    maven { url 'https://frcmaven.wpi.edu/artifactory/release' }  // ★ Official WPILib repo (2020.3.2 lives here)
+    mavenCentral()
+    maven { url 'https://www.kauailabs.com/maven2' }              // ★ navX repo (good to have)
+    maven { url 'https://dev.studica.com/maven/release' }         // ★ Studica (place LAST; may 502)
+}
+
+// Define my targets (VMX-Pi) and artifacts
+deploy {
+    targets {
+        vmxpi("roborio") {
+            team = frc.getTeamNumber()
+        }
+    }
+    artifacts {
+        frcJavaArtifact('frcJava') {
+            targets << "roborio"
+            debug = frc.getDebugOrDefault(false)
+        }
+        fileTreeArtifact('frcStaticFileDeploy') {
+            files = fileTree(dir: 'src/main/deploy')
+            targets << "roborio"
+            directory = '/home/lvuser/deploy'
+        }
+    }
+}
+
+// Set this to true to enable desktop support.
+def includeDesktopSupport = false
+
+dependencies {
+    implementation wpi.deps.wpilib()
+    nativeZip wpi.deps.wpilibJni(wpi.platforms.raspbian)
+    nativeDesktopZip wpi.deps.wpilibJni(wpi.platforms.desktop)
+
+    implementation wpi.deps.vendor.java()
+    nativeZip wpi.deps.vendor.jni(wpi.platforms.raspbian)
+    nativeDesktopZip wpi.deps.vendor.jni(wpi.platforms.desktop)
+
+    testImplementation 'junit:junit:4.12'
+
+    // Enable simulation gui support. Must check the box in vscode to enable support upon debugging
+    simulation wpi.deps.sim.gui(wpi.platforms.desktop, false)
+
+    // ★ Pin WPILib 2020 artifacts that navX may pull transitively (avoid '2020.+' from the wrong repo)
+    constraints {
+        implementation('edu.wpi.first.cscore:cscore-java:2020.3.2')
+        implementation('edu.wpi.first.cameraserver:cameraserver:2020.3.2')
+        implementation('edu.wpi.first.ntcore:ntcore-java:2020.3.2')
+        implementation('edu.wpi.first.wpiutil:wpiutil-java:2020.3.2')
+        implementation('edu.wpi.first.wpimath:wpimath-java:2020.3.2')
+    }
+}
+
+// Setting up my Jar File. In this case, adding all libraries into the main jar ('fat jar')
+jar {
+    from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
+    manifest edu.wpi.first.gradlerio.GradleRIOPlugin.javaManifest(ROBOT_MAIN_CLASS)
+}
